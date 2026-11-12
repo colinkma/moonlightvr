@@ -24,6 +24,8 @@ class VrMoonlightApp {
   jint OnSurfaceCreated(JNIEnv* env);
   void OnSurfaceChanged(int width, int height);
   void SetTextureTransform(const float* transform);
+  void SetVideoAspectRatio(float aspectRatio);
+  void SetLensDistortionStrength(float strength);
   void OnDrawFrame();
   void OnPause();
   void OnResume();
@@ -50,20 +52,20 @@ class VrMoonlightApp {
   float GetHorizontalCurvature() const;
   float GetVerticalCurvature() const;
   float GetScreenSize() const;
-  void SetCurrentFramePose(const std::array<float, 4>& orientation);
   void RecenterView();
 
  private:
   void ResetRenderTarget();
   void UpdateRenderTarget();
   bool UpdateDeviceParams();
-  void RenderVideoToTexture(const std::array<float, 3>& head_position,
-                            const std::array<float, 4>& head_orientation);
+  void RenderVideoToTexture();
   void DestroyCardboardResources();
   void UpdateModelMatrix();
   void UpdateScreenGeometry();
   void TransformLensMesh(std::vector<float>& vertices, float scale,
                          float offset_x, bool is_left_eye);
+  void ApplyLensDistortionStrength(const CardboardMesh& source,
+                                   std::vector<float>& uvs) const;
   void UpdateCameraModelMatrix();
 
   JavaVM* java_vm_;
@@ -71,7 +73,6 @@ class VrMoonlightApp {
   jobject java_asset_mgr_;
   AAssetManager* asset_mgr_;
 
-  CardboardHeadTracker* head_tracker_;
   CardboardLensDistortion* lens_distortion_;
   CardboardDistortionRenderer* distortion_renderer_;
 
@@ -116,20 +117,15 @@ class VrMoonlightApp {
   bool using_curved_geometry_;
   int curved_rows_;
   int curved_vertices_per_strip_;
-  std::array<float, 4> last_rendered_orientation_;
-  bool has_render_pose_;
   bool skybox_enabled_ = true;
   float skybox_brightness_ = 1.0f;
-  std::array<float, 4> recenter_offset_;
-  bool has_recenter_offset_;
-  std::array<float, 4> current_recenter_offset_;
-  bool has_current_recenter_offset_;
-  int64_t last_recenter_update_nanos_;
   bool geometry_dirty_;
   float screen_yaw_radians_ = 0.0f;
   float screen_pitch_radians_ = 0.0f;
   float screen_rotation_radians_ = 0.0f;
   float lens_scale_ = 1.0f;
+  float lens_distortion_strength_ = 0.70f;
+  float video_aspect_ratio_ = 16.0f / 9.0f;
   float left_lens_offset_x_ = 0.0f;
   float right_lens_offset_x_ = 0.0f;
   bool lens_mesh_dirty_ = true;

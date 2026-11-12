@@ -4,7 +4,8 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - vr
+      - main
+      - feature/cardboard-sbs-display
     tags:
       - '*'
 
@@ -12,13 +13,13 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
       actions: write
+      contents: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
-          ref: vr
+          ref: ${{ github.ref }}
           fetch-depth: 0
           submodules: recursive
 
@@ -29,15 +30,19 @@ jobs:
           java-version: '21'
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools'
 
       - name: Read version from gradle
         id: version
         run: |
           VERSION_NAME=$(grep -oP 'versionName\s+"\K[0-9.]+' app/build.gradle)
-          WORKFLOW_VERSION="${VERSION_NAME}.${GITHUB_RUN_NUMBER}"
+          BUILD_DATE=$(TZ=Asia/Shanghai date +%Y-%m-%d)
+          BUILD_LABEL="${BUILD_DATE}-${GITHUB_RUN_NUMBER}"
           echo "VERSION_NAME=$VERSION_NAME" >> $GITHUB_OUTPUT
-          echo "WORKFLOW_VERSION=$WORKFLOW_VERSION" >> $GITHUB_OUTPUT
+          echo "BUILD_DATE=$BUILD_DATE" >> $GITHUB_OUTPUT
+          echo "BUILD_LABEL=$BUILD_LABEL" >> $GITHUB_OUTPUT
 
       - name: Prepare signing keystore
         env:
@@ -46,9 +51,12 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          if [[ -n "$ANDROID_KEYSTORE_BASE64" && -n "$ANDROID_KEYSTORE_PASSWORD" && -n "$ANDROID_KEY_ALIAS" && -n "$ANDROID_KEY_PASSWORD" ]]; then
-            echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/moonlightvr-ci.keystore"
+          if [[ -z "$ANDROID_KEYSTORE_BASE64" || -z "$ANDROID_KEYSTORE_PASSWORD" || -z "$ANDROID_KEY_ALIAS" || -z "$ANDROID_KEY_PASSWORD" ]]; then
+            echo "::error::缺少稳定签名密钥。请在 GitHub Actions Secrets 中配置 ANDROID_KEYSTORE_BASE64、ANDROID_KEYSTORE_PASSWORD、ANDROID_KEY_ALIAS 和 ANDROID_KEY_PASSWORD。"
+            exit 1
           fi
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/moonlightvr-ci.keystore"
+          keytool -list -v -keystore "$RUNNER_TEMP/moonlightvr-ci.keystore" -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" | grep -m 1 "SHA256:"
 
       - name: Build debug APK
         env:
@@ -75,12 +83,12 @@ jobs:
       - name: Rename APK with metadata
         run: |
           BUILD_TYPE="debug"
-          WORKFLOW_VERSION="${{ steps.version.outputs.WORKFLOW_VERSION }}"
+          BUILD_LABEL="${{ steps.version.outputs.BUILD_LABEL }}"
           SHA_SHORT=$(echo ${{ github.sha }} | cut -c1-8)
           APK_PATH="app/build/outputs/apk/vrMode/${BUILD_TYPE,,}/app-vrMode-${BUILD_TYPE,,}.apk"
           
           if [ -f "$APK_PATH" ]; then
-            NEW_NAME="MoonlightVR-VrMode-${WORKFLOW_VERSION}.apk"
+            NEW_NAME="MoonlightVR-VrMode-${BUILD_LABEL}.apk"
             cp "$APK_PATH" "$NEW_NAME"
             echo "APK_NAME=$NEW_NAME" >> $GITHUB_ENV
             echo "APK exists at: $APK_PATH"
@@ -88,31 +96,21 @@ jobs:
             echo "Error: APK not found at $APK_PATH"
             exit 1
           fi
-          echo "WORKFLOW_VERSION=${WORKFLOW_VERSION}" >> $GITHUB_ENV
+          echo "BUILD_LABEL=${BUILD_LABEL}" >> $GITHUB_ENV
 
-      - name: Upload APK as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: MoonlightVR-VrMode-${{ steps.version.outputs.WORKFLOW_VERSION }}
-          path: MoonlightVR-*.apk
-          retention-days: 30
-
-      - name: Upload Build Logs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-logs
-          path: |
-            build/reports/
-            app/build/outputs/**/*.txt
-            app/build/outputs/**/*.log
-          retention-days: 7
+      - name: Publish APK as a direct GitHub Release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "vrmode-${BUILD_LABEL}" "$APK_NAME" \
+            --title "MoonlightVR 固定画面版 ${BUILD_LABEL}" \
+            --notes "固定画面 VR 模式 APK。可直接下载 APK 文件安装。" \
+            --prerelease
 
       - name: Summary
         run: |
           BRANCH_NAME="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
           BRANCH_NAME="${BRANCH_NAME:-manual}"
-          WORKFLOW_VERSION="${{ steps.version.outputs.WORKFLOW_VERSION }}"
           echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
@@ -120,6 +118,8 @@ jobs:
           echo "| Branch | $BRANCH_NAME |" >> $GITHUB_STEP_SUMMARY
           echo "| Flavor | vrMode |" >> $GITHUB_STEP_SUMMARY
           echo "| Build Type | debug |" >> $GITHUB_STEP_SUMMARY
-          echo "| Version | ${WORKFLOW_VERSION:-unknown} |" >> $GITHUB_STEP_SUMMARY
+          echo "| App Version | ${{ steps.version.outputs.VERSION_NAME }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build Date (Asia/Shanghai) | ${{ steps.version.outputs.BUILD_DATE }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build | ${BUILD_LABEL:-unknown} |" >> $GITHUB_STEP_SUMMARY
           echo "| Commit | ${{ github.sha }} |" >> $GITHUB_STEP_SUMMARY
           echo "| APK | ${{ env.APK_NAME }} |" >> $GITHUB_STEP_SUMMARY

@@ -21,11 +21,6 @@ namespace moonlight_vr {
 
 namespace {
 
-constexpr float kZNear = 0.1f;
-constexpr float kZFar = 100.0f;
-constexpr int kVelocityFilterCutoffFrequency = 6;
-constexpr int64_t kPredictionTimeWithoutVsyncNanos = 50000000LL;
-constexpr int64_t kDisplayPosePredictionNanos = 16000000LL;
 constexpr float kScreenWidthMeters = 2.2f;
 constexpr float kScreenAspectRatio = 16.0f / 9.0f;
 constexpr float kMinScreenDistanceMeters = 1.0f;
@@ -34,7 +29,6 @@ constexpr float kDefaultScreenDistanceMeters = 2.0f;
 constexpr float kMinLensScale = 0.5f;
 constexpr float kMaxLensScale = 3.0f;
 
-constexpr int kEyeCount = 2;
 
 constexpr float kMaxHorizontalCurvatureAngle = 3.14159265358979323846f;
 constexpr float kMaxVerticalCurvatureAngle = 1.57079632679489661923f;
@@ -51,10 +45,10 @@ const GLfloat kQuadVertices[] = {
 };
 
 const GLfloat kQuadTexCoords[] = {
-     0.f, 1.f,
-     1.f, 1.f,
      0.f, 0.f,
      1.f, 0.f,
+     0.f, 1.f,
+     1.f, 1.f,
 };
 
 const char kVideoVertexShader[] =
@@ -139,7 +133,6 @@ VrMoonlightApp::VrMoonlightApp(JavaVM* vm, jobject activity, jobject asset_manag
       activity_(nullptr),
       java_asset_mgr_(nullptr),
       asset_mgr_(nullptr),
-      head_tracker_(nullptr),
       lens_distortion_(nullptr),
       distortion_renderer_(nullptr),
       screen_params_changed_(false),
@@ -174,13 +167,6 @@ VrMoonlightApp::VrMoonlightApp(JavaVM* vm, jobject activity, jobject asset_manag
       using_curved_geometry_(false),
       curved_rows_(0),
       curved_vertices_per_strip_(0),
-      last_rendered_orientation_{0.f, 0.f, 0.f, 1.f},
-      has_render_pose_(false),
-      recenter_offset_{0.f, 0.f, 0.f, 1.f},
-      has_recenter_offset_(false),
-      current_recenter_offset_{0.f, 0.f, 0.f, 1.f},
-      has_current_recenter_offset_(false),
-      last_recenter_update_nanos_(0),
       geometry_dirty_(true) {
   std::fill(std::begin(texture_transform_), std::end(texture_transform_), 0.f);
   texture_transform_[0] = texture_transform_[5] = texture_transform_[10] =
@@ -204,12 +190,9 @@ VrMoonlightApp::VrMoonlightApp(JavaVM* vm, jobject activity, jobject asset_manag
   }
 
   if (activity_ && java_asset_mgr_) {
+    // Cardboard initialization provides the viewer profile used for optical
+    // distortion correction. No head tracker is created in fixed SBS mode.
     Cardboard_initializeAndroid(java_vm_, activity_);
-    head_tracker_ = CardboardHeadTracker_create();
-    CardboardHeadTracker_setLowPassFilter(head_tracker_, kVelocityFilterCutoffFrequency);
-  } else {
-    // Log error: could not initialize Cardboard resources
-    head_tracker_ = nullptr;
   }
 
   UpdateModelMatrix();
@@ -242,11 +225,6 @@ VrMoonlightApp::~VrMoonlightApp() {
   if (depth_renderbuffer_) {
     glDeleteRenderbuffers(1, &depth_renderbuffer_);
   }
-  if (head_tracker_ != nullptr) {
-    CardboardHeadTracker_destroy(head_tracker_);
-    head_tracker_ = nullptr;
-  }
-
   JNIEnv* env = nullptr;
   if (java_vm_->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) == JNI_OK) {
     if (activity_) {
@@ -352,134 +330,50 @@ void VrMoonlightApp::SetTextureTransform(const float* transform) {
   }
 }
 
+void VrMoonlightApp::SetVideoAspectRatio(float aspect_ratio) {
+  if (std::isfinite(aspect_ratio) && aspect_ratio > 0.1f && aspect_ratio < 10.0f) {
+    video_aspect_ratio_ = aspect_ratio;
+  }
+}
+
+void VrMoonlightApp::SetLensDistortionStrength(float strength) {
+  lens_distortion_strength_ = std::clamp(strength, 0.0f, 1.0f);
+  lens_mesh_dirty_ = true;
+}
+
 void VrMoonlightApp::OnDrawFrame() {
-  if (geometry_dirty_) {
-    UpdateScreenGeometry();
-    geometry_dirty_ = false;
-  }
-
-  if (screen_width_ == 0 || screen_height_ == 0) {
+  if (screen_width_ == 0 || screen_height_ == 0 || !UpdateDeviceParams()) {
     return;
   }
-  if (!UpdateDeviceParams()) {
-    return;
-  }
-  int64_t render_timestamp = GetBootTimeNano() + kPredictionTimeWithoutVsyncNanos;
-  float render_position[3];
-  float render_orientation[4];
-  CardboardHeadTracker_getPose(head_tracker_, render_timestamp, kLandscapeLeft,
-                               render_position, render_orientation);
 
-  const std::array<float, 3> head_position = {render_position[0],
-                                              render_position[1],
-                                              render_position[2]};
-  std::array<float, 4> head_orientation = {render_orientation[0],
-                                           render_orientation[1],
-                                           render_orientation[2],
-                                           render_orientation[3]};
+  RenderVideoToTexture();
 
-  Quatf inv_recenter(0.f, 0.f, 0.f, 1.f);
-  if (has_recenter_offset_) {
-    const int64_t now_nanos = GetBootTimeNano();
-    if (!has_current_recenter_offset_) {
-      current_recenter_offset_ = {0.f, 0.f, 0.f, 1.f};
-      has_current_recenter_offset_ = true;
-    }
+  // The offscreen texture contains two identical copies of the complete
+  // decoded frame: one in each half of the display.
+  left_eye_texture_description_.texture = render_texture_;
+  left_eye_texture_description_.left_u = 0.0f;
+  left_eye_texture_description_.right_u = 0.5f;
+  left_eye_texture_description_.top_v = 1.0f;
+  left_eye_texture_description_.bottom_v = 0.0f;
 
-    float alpha = 0.05f;
-    if (last_recenter_update_nanos_ != 0) {
-      const float dt_seconds =
-          static_cast<float>(now_nanos - last_recenter_update_nanos_) /
-          1000000000.0f;
-      constexpr float kRecenterTimeConstantSeconds = 1.0f;
-      alpha = 1.0f - std::exp(-dt_seconds / kRecenterTimeConstantSeconds);
-      if (alpha < 0.0f) {
-        alpha = 0.0f;
-      } else if (alpha > 1.0f) {
-        alpha = 1.0f;
-      }
-    }
-    last_recenter_update_nanos_ = now_nanos;
+  right_eye_texture_description_.texture = render_texture_;
+  right_eye_texture_description_.left_u = 0.5f;
+  right_eye_texture_description_.right_u = 1.0f;
+  right_eye_texture_description_.top_v = 1.0f;
+  right_eye_texture_description_.bottom_v = 0.0f;
 
-    Quatf current_q(current_recenter_offset_[0], current_recenter_offset_[1],
-                    current_recenter_offset_[2], current_recenter_offset_[3]);
-    Quatf target_q(recenter_offset_[0], recenter_offset_[1],
-                   recenter_offset_[2], recenter_offset_[3]);
-    Quatf slerped = SlerpQuaternions(current_q, target_q, alpha);
-    current_recenter_offset_ = {slerped.x, slerped.y, slerped.z, slerped.w};
-    inv_recenter = Quatf(-slerped.x, -slerped.y, -slerped.z, slerped.w);
-
-    Quatf render_q(head_orientation[0], head_orientation[1], head_orientation[2],
-                   head_orientation[3]);
-    Quatf corrected_render = render_q * inv_recenter;
-    head_orientation = {corrected_render.x, corrected_render.y,
-                        corrected_render.z, corrected_render.w};
-  }
-
-  SetCurrentFramePose(head_orientation);
-  RenderVideoToTexture(head_position, head_orientation);
-
-  int64_t display_timestamp = GetBootTimeNano() + kDisplayPosePredictionNanos;
-  float display_position[3];
-  float display_orientation[4];
-  CardboardHeadTracker_getPose(head_tracker_, display_timestamp, kLandscapeLeft,
-                               display_position, display_orientation);
-  std::array<float, 4> latest_orientation = {display_orientation[0],
-                                             display_orientation[1],
-                                             display_orientation[2],
-                                             display_orientation[3]};
-  if (has_recenter_offset_) {
-    Quatf latest_q(latest_orientation[0], latest_orientation[1],
-                   latest_orientation[2], latest_orientation[3]);
-    Quatf corrected_latest = latest_q * inv_recenter;
-    latest_orientation = {corrected_latest.x, corrected_latest.y,
-                          corrected_latest.z, corrected_latest.w};
-  }
-
-  float u_offset = 0.f;
-  float v_offset = 0.f;
-  if (has_render_pose_) {
-    CalculateUvOffset(last_rendered_orientation_, latest_orientation,
-                      u_offset, v_offset);
-  }
-
-  left_eye_texture_description_.left_u = 0.f + u_offset;
-  left_eye_texture_description_.right_u = 0.5f + u_offset;
-  left_eye_texture_description_.top_v = 1.f + v_offset;
-  left_eye_texture_description_.bottom_v = 0.f + v_offset;
-
-  right_eye_texture_description_.left_u = 0.5f + u_offset;
-  right_eye_texture_description_.right_u = 1.f + u_offset;
-  right_eye_texture_description_.top_v = 1.f + v_offset;
-  right_eye_texture_description_.bottom_v = 0.f + v_offset;
-
+  // Keep Cardboard's lens-distortion correction, but do not sample head pose.
   CardboardDistortionRenderer_renderEyeToDisplay(
       distortion_renderer_, 0, 0, 0, screen_width_, screen_height_,
       &left_eye_texture_description_, &right_eye_texture_description_);
-
-  glViewport(0, 0, screen_width_, screen_height_);
-  glDisable(GL_DEPTH_TEST);
-  Matrix4x4 identity;
-  for (int i = 0; i < 4; ++i) {
-    identity.m[i][i] = 1.f;
-  }
-  auto identity_gl = identity.ToGlArray();
-  glUseProgram(line_program_);
-  glUniformMatrix4fv(line_mvp_uniform_, 1, GL_FALSE, identity_gl.data());
-  glEnableVertexAttribArray(line_pos_attrib_);
-  glVertexAttribPointer(line_pos_attrib_, 3, GL_FLOAT, GL_FALSE, 0, kLineVertices);
-  glDrawArrays(GL_LINES, 0, 2);
-  glDisableVertexAttribArray(line_pos_attrib_);
 }
 
 void VrMoonlightApp::OnPause() {
-  CardboardHeadTracker_pause(head_tracker_);
+  // Fixed side-by-side mode does not use head tracking.
 }
 
 void VrMoonlightApp::OnResume() {
-  CardboardHeadTracker_resume(head_tracker_);
   device_params_changed_ = true;
-  last_recenter_update_nanos_ = 0;
 }
 
 void VrMoonlightApp::ResetRenderTarget() {
@@ -599,12 +493,20 @@ bool VrMoonlightApp::UpdateDeviceParams() {
                                    left_mesh.vertices + left_mesh.n_vertices * 2);
     std::vector<float> custom_right(right_mesh.vertices,
                                     right_mesh.vertices + right_mesh.n_vertices * 2);
+    std::vector<float> custom_left_uvs(left_mesh.uvs,
+                                       left_mesh.uvs + left_mesh.n_vertices * 2);
+    std::vector<float> custom_right_uvs(right_mesh.uvs,
+                                        right_mesh.uvs + right_mesh.n_vertices * 2);
 
     TransformLensMesh(custom_left, lens_scale_, left_lens_offset_x_, true);
     TransformLensMesh(custom_right, lens_scale_, right_lens_offset_x_, false);
+    ApplyLensDistortionStrength(left_mesh, custom_left_uvs);
+    ApplyLensDistortionStrength(right_mesh, custom_right_uvs);
 
     left_mesh.vertices = custom_left.data();
     right_mesh.vertices = custom_right.data();
+    left_mesh.uvs = custom_left_uvs.data();
+    right_mesh.uvs = custom_right_uvs.data();
 
     CardboardDistortionRenderer_setMesh(distortion_renderer_, &left_mesh, kLeft);
     CardboardDistortionRenderer_setMesh(distortion_renderer_, &right_mesh, kRight);
@@ -613,6 +515,29 @@ bool VrMoonlightApp::UpdateDeviceParams() {
   }
 
   return true;
+}
+
+void VrMoonlightApp::ApplyLensDistortionStrength(const CardboardMesh& source,
+                                                   std::vector<float>& uvs) const {
+  if (source.vertices == nullptr || uvs.empty() || source.n_vertices <= 0) {
+    return;
+  }
+  float min_x = source.vertices[0], max_x = source.vertices[0];
+  float min_y = source.vertices[1], max_y = source.vertices[1];
+  for (int i = 0; i < source.n_vertices; ++i) {
+    const float x = source.vertices[i * 2], y = source.vertices[i * 2 + 1];
+    min_x = std::min(min_x, x); max_x = std::max(max_x, x);
+    min_y = std::min(min_y, y); max_y = std::max(max_y, y);
+  }
+  const float width = max_x - min_x, height = max_y - min_y;
+  if (width <= 0.0001f || height <= 0.0001f) return;
+  // Blend Cardboard's inverse-distortion UVs with a linear, undistorted map.
+  for (int i = 0; i < source.n_vertices; ++i) {
+    const float linear_u = (source.vertices[i * 2] - min_x) / width;
+    const float linear_v = (source.vertices[i * 2 + 1] - min_y) / height;
+    uvs[i * 2] = linear_u + (uvs[i * 2] - linear_u) * lens_distortion_strength_;
+    uvs[i * 2 + 1] = linear_v + (uvs[i * 2 + 1] - linear_v) * lens_distortion_strength_;
+  }
 }
 
 void VrMoonlightApp::TransformLensMesh(std::vector<float>& vertices, float scale,
@@ -654,162 +579,60 @@ void VrMoonlightApp::TransformLensMesh(std::vector<float>& vertices, float scale
   }
 }
 
-void VrMoonlightApp::RenderVideoToTexture(
-    const std::array<float, 3>& head_position,
-    const std::array<float, 4>& head_orientation) {
-  if (framebuffer_ == 0 || render_texture_ == 0 || lens_distortion_ == nullptr) {
+void VrMoonlightApp::RenderVideoToTexture() {
+  if (framebuffer_ == 0 || render_texture_ == 0 || video_texture_ == 0) {
     return;
   }
 
   glBindFramebuffer(GL_FRAMEBUFFER, framebuffer_);
   glViewport(0, 0, screen_width_, screen_height_);
+  glDisable(GL_DEPTH_TEST);
   glClearColor(0.f, 0.f, 0.f, 1.f);
-  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-  glEnable(GL_DEPTH_TEST);
+  glClear(GL_COLOR_BUFFER_BIT);
 
   glUseProgram(video_program_);
-  const bool use_curved_geometry = using_curved_geometry_ &&
-      !screen_vertices_.empty() && !screen_texcoords_.empty();
   glEnableVertexAttribArray(position_attrib_);
-  if (use_curved_geometry) {
-    glVertexAttribPointer(position_attrib_, 3, GL_FLOAT, GL_FALSE, 0,
-                           screen_vertices_.data());
-  } else {
-    glVertexAttribPointer(position_attrib_, 3, GL_FLOAT, GL_FALSE,
-                           sizeof(GLfloat) * 3, kQuadVertices);
-  }
+  glVertexAttribPointer(position_attrib_, 3, GL_FLOAT, GL_FALSE,
+                        sizeof(GLfloat) * 3, kQuadVertices);
   glEnableVertexAttribArray(texcoord_attrib_);
-  if (use_curved_geometry) {
-    glVertexAttribPointer(texcoord_attrib_, 2, GL_FLOAT, GL_FALSE, 0,
-                          screen_texcoords_.data());
-  } else {
-    glVertexAttribPointer(texcoord_attrib_, 2, GL_FLOAT, GL_FALSE, 0,
-                          kQuadTexCoords);
-  }
+  glVertexAttribPointer(texcoord_attrib_, 2, GL_FLOAT, GL_FALSE, 0,
+                        kQuadTexCoords);
+
   glUniformMatrix4fv(texture_transform_uniform_, 1, GL_FALSE, texture_transform_);
   glActiveTexture(GL_TEXTURE0);
   glBindTexture(GL_TEXTURE_EXTERNAL_OES, video_texture_);
   glUniform1i(sampler_uniform_, 0);
 
-  Quatf orientation(head_orientation[0], head_orientation[1],
-                    head_orientation[2], head_orientation[3]);
-  Matrix4x4 head_view = GetViewMatrixFromPose(head_position, orientation);
+  Matrix4x4 identity;
+  for (int i = 0; i < 4; ++i) {
+    identity.m[i][i] = 1.0f;
+  }
+  const std::array<float, 16> identity_gl = identity.ToGlArray();
+  glUniformMatrix4fv(mvp_uniform_, 1, GL_FALSE, identity_gl.data());
 
-  const int left_eye_width = screen_width_ / kEyeCount;
+  const int left_eye_width = screen_width_ / 2;
   const int right_eye_width = screen_width_ - left_eye_width;
-  const std::array<int, kEyeCount> viewport_x = {0, left_eye_width};
-  const std::array<int, kEyeCount> viewport_width = {left_eye_width,
-                                                   right_eye_width};
-  const std::array<CardboardEye, kEyeCount> eyes = {kLeft, kRight};
 
-  for (int eye_index = 0; eye_index < kEyeCount; ++eye_index) {
-    float eye_from_head_raw[16];
-    CardboardLensDistortion_getEyeFromHeadMatrix(
-        lens_distortion_, eyes[eye_index], eye_from_head_raw);
-    Matrix4x4 eye_from_head = GetMatrixFromGlArray(eye_from_head_raw);
-
-    float projection_raw[16];
-    CardboardLensDistortion_getProjectionMatrix(
-        lens_distortion_, eyes[eye_index], kZNear, kZFar, projection_raw);
-    Matrix4x4 projection = GetMatrixFromGlArray(projection_raw);
-
-    Matrix4x4 view = eye_from_head * head_view;
-    Matrix4x4 mvp = projection * view * model_matrix_;
-    std::array<float, 16> mvp_gl = mvp.ToGlArray();
-
-    glViewport(viewport_x[eye_index], 0, viewport_width[eye_index], screen_height_);
-    glUniformMatrix4fv(mvp_uniform_, 1, GL_FALSE, mvp_gl.data());
-    if (use_curved_geometry) {
-      for (int row = 0; row < curved_rows_; ++row) {
-        glDrawArrays(GL_TRIANGLE_STRIP,
-                     row * curved_vertices_per_strip_,
-                     curved_vertices_per_strip_);
-      }
+  // Fit the complete source frame in each eye without cropping or stretching.
+  const auto draw_eye = [this](int x, int width) {
+    if (width <= 0 || screen_height_ <= 0) return;
+    const float eye_aspect = static_cast<float>(width) / screen_height_;
+    int draw_width = width, draw_height = screen_height_;
+    if (video_aspect_ratio_ > eye_aspect) {
+      draw_height = std::max(1, static_cast<int>(std::lround(width / video_aspect_ratio_)));
     } else {
-      glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+      draw_width = std::max(1, static_cast<int>(std::lround(screen_height_ * video_aspect_ratio_)));
     }
-  }
-
-  if (camera_enabled_ && camera_texture_ != 0) {
-    glUniformMatrix4fv(texture_transform_uniform_, 1, GL_FALSE, camera_texture_transform_);
-    glBindTexture(GL_TEXTURE_EXTERNAL_OES, camera_texture_);
-
-    glVertexAttribPointer(position_attrib_, 3, GL_FLOAT, GL_FALSE,
-                          sizeof(GLfloat) * 3, kQuadVertices);
-    glVertexAttribPointer(texcoord_attrib_, 2, GL_FLOAT, GL_FALSE, 0,
-                          kQuadTexCoords);
-    glEnableVertexAttribArray(position_attrib_);
-    glEnableVertexAttribArray(texcoord_attrib_);
-
-    for (int eye_index = 0; eye_index < kEyeCount; ++eye_index) {
-      float eye_from_head_raw[16];
-      CardboardLensDistortion_getEyeFromHeadMatrix(
-          lens_distortion_, eyes[eye_index], eye_from_head_raw);
-      Matrix4x4 eye_from_head = GetMatrixFromGlArray(eye_from_head_raw);
-
-      float projection_raw[16];
-      CardboardLensDistortion_getProjectionMatrix(
-          lens_distortion_, eyes[eye_index], kZNear, kZFar, projection_raw);
-      Matrix4x4 projection = GetMatrixFromGlArray(projection_raw);
-
-      Matrix4x4 view = eye_from_head * head_view;
-      Matrix4x4 camera_mvp = projection * view * camera_model_matrix_;
-      std::array<float, 16> camera_mvp_gl = camera_mvp.ToGlArray();
-
-      glViewport(viewport_x[eye_index], 0, viewport_width[eye_index], screen_height_);
-      glUniformMatrix4fv(mvp_uniform_, 1, GL_FALSE, camera_mvp_gl.data());
-      glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-    }
-  }
+    glViewport(x + (width - draw_width) / 2, (screen_height_ - draw_height) / 2,
+               draw_width, draw_height);
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+  };
+  draw_eye(0, left_eye_width);
+  draw_eye(left_eye_width, right_eye_width);
 
   glDisableVertexAttribArray(position_attrib_);
   glDisableVertexAttribArray(texcoord_attrib_);
   glBindTexture(GL_TEXTURE_EXTERNAL_OES, 0);
-
-  if (skybox_enabled_ && skybox_program_ != 0 && skybox_texture_ != 0) {
-    glDepthFunc(GL_LEQUAL);
-    glDepthMask(GL_FALSE);
-    glUseProgram(skybox_program_);
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_CUBE_MAP, skybox_texture_);
-    glUniform1i(skybox_sampler_uniform_, 0);
-    glUniform1f(skybox_brightness_uniform_, skybox_brightness_);
-    glEnableVertexAttribArray(skybox_pos_attrib_);
-    glVertexAttribPointer(skybox_pos_attrib_, 3, GL_FLOAT, GL_FALSE, 0,
-                          kSkyboxVertices);
-
-    for (int eye_index = 0; eye_index < kEyeCount; ++eye_index) {
-      float eye_from_head_raw[16];
-      CardboardLensDistortion_getEyeFromHeadMatrix(
-          lens_distortion_, eyes[eye_index], eye_from_head_raw);
-      Matrix4x4 eye_from_head = GetMatrixFromGlArray(eye_from_head_raw);
-
-      float projection_raw[16];
-      CardboardLensDistortion_getProjectionMatrix(
-          lens_distortion_, eyes[eye_index], kZNear, kZFar, projection_raw);
-      Matrix4x4 projection = GetMatrixFromGlArray(projection_raw);
-
-      Matrix4x4 view_no_trans = eye_from_head * head_view;
-      view_no_trans.m[0][3] = 0.0f;
-      view_no_trans.m[1][3] = 0.0f;
-      view_no_trans.m[2][3] = 0.0f;
-
-      Matrix4x4 skybox_vp = projection * view_no_trans;
-      std::array<float, 16> skybox_vp_gl = skybox_vp.ToGlArray();
-
-      glViewport(viewport_x[eye_index], 0, viewport_width[eye_index],
-                 screen_height_);
-      glUniformMatrix4fv(skybox_vp_uniform_, 1, GL_FALSE, skybox_vp_gl.data());
-      glDrawArrays(GL_TRIANGLES, 0, 36);
-    }
-
-    glDisableVertexAttribArray(skybox_pos_attrib_);
-    glDepthMask(GL_TRUE);
-    glDepthFunc(GL_LESS);
-  }
-
-  glDisable(GL_DEPTH_TEST);
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
@@ -824,33 +647,8 @@ void VrMoonlightApp::DestroyCardboardResources() {
   }
 }
 
-void VrMoonlightApp::SetCurrentFramePose(const std::array<float, 4>& orientation) {
-  last_rendered_orientation_ = orientation;
-  has_render_pose_ = true;
-}
-
 void VrMoonlightApp::RecenterView() {
-  screen_yaw_radians_ = 0.0f;
-  screen_pitch_radians_ = 0.0f;
-  screen_rotation_radians_ = 0.0f;
-  UpdateModelMatrix();
-
-  if (head_tracker_ == nullptr) {
-    return;
-  }
-  int64_t timestamp = GetBootTimeNano() + kPredictionTimeWithoutVsyncNanos;
-  float position[3];
-  float orientation[4];
-  CardboardHeadTracker_getPose(head_tracker_, timestamp, kLandscapeLeft,
-                               position, orientation);
-  recenter_offset_ = {orientation[0], orientation[1], orientation[2],
-                      orientation[3]};
-  has_recenter_offset_ = true;
-  if (!has_current_recenter_offset_) {
-    current_recenter_offset_ = {0.f, 0.f, 0.f, 1.f};
-    has_current_recenter_offset_ = true;
-  }
-  last_recenter_update_nanos_ = 0;
+  // There is no tracked pose to recenter in fixed side-by-side mode.
 }
 
 void VrMoonlightApp::SetScreenDistance(float meters) {
