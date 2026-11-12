@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - vr
+      - feature/cardboard-sbs-display
     tags:
       - '*'
 
@@ -18,7 +19,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
-          ref: vr
+          ref: ${{ github.ref }}
           fetch-depth: 0
           submodules: recursive
 
