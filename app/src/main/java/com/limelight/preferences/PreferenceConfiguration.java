@@ -69,7 +69,6 @@ public class PreferenceConfiguration {
     private static final String GAMEPAD_MOTION_SENSORS_PREF_STRING = "checkbox_gamepad_motion_sensors";
     private static final String GAMEPAD_MOTION_FALLBACK_PREF_STRING = "checkbox_gamepad_motion_fallback";
     static final String ENABLE_VR_PREF_STRING = "checkbox_enable_vr";
-    private static final String VR_HEAD_LOCKED_PREF_STRING = "checkbox_vr_head_locked";
     private static final String ENABLE_SKYBOX_PREF_STRING = "checkbox_enable_skybox";
     private static final String VR_SCREEN_DISTANCE_PREF_STRING = "seekbar_vr_screen_distance";
     private static final String VR_SCREEN_SIZE_PREF_STRING = "seekbar_vr_screen_size";
@@ -183,7 +182,6 @@ public class PreferenceConfiguration {
     public boolean gamepadTouchpadAsMouse;
     public boolean gamepadMotionSensorsFallbackToDevice;
     public boolean enableVr;
-    public boolean vrHeadLocked;
     public boolean enableSkybox;
     public float vrScreenDistanceMeters;
     public float vrScreenSizeMultiplier;
@@ -634,7 +632,6 @@ public class PreferenceConfiguration {
         config.showGuideButton = prefs.getBoolean(SHOW_GUIDE_BUTTON_PREF_STRING, SHOW_GUIDE_BUTTON_DEFAULT);
         config.enableHdr = prefs.getBoolean(ENABLE_HDR_PREF_STRING, DEFAULT_ENABLE_HDR) && !isShieldAtvFirmwareWithBrokenHdr();
         config.enableVr = prefs.getBoolean(ENABLE_VR_PREF_STRING, DEFAULT_ENABLE_VR);
-        config.vrHeadLocked = prefs.getBoolean(VR_HEAD_LOCKED_PREF_STRING, true);
         config.enableSkybox = prefs.getBoolean(ENABLE_SKYBOX_PREF_STRING, DEFAULT_ENABLE_SKYBOX);
         int vrDistanceRaw = prefs.getInt(VR_SCREEN_DISTANCE_PREF_STRING, DEFAULT_VR_SCREEN_DISTANCE_INT);
         config.vrScreenDistanceMeters = vrDistanceRaw / 10f;
