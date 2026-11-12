@@ -170,13 +170,6 @@ VrMoonlightApp::VrMoonlightApp(JavaVM* vm, jobject activity, jobject asset_manag
       using_curved_geometry_(false),
       curved_rows_(0),
       curved_vertices_per_strip_(0),
-      last_rendered_orientation_{0.f, 0.f, 0.f, 1.f},
-      has_render_pose_(false),
-      recenter_offset_{0.f, 0.f, 0.f, 1.f},
-      has_recenter_offset_(false),
-      current_recenter_offset_{0.f, 0.f, 0.f, 1.f},
-      has_current_recenter_offset_(false),
-      last_recenter_update_nanos_(0),
       geometry_dirty_(true) {
   std::fill(std::begin(texture_transform_), std::end(texture_transform_), 0.f);
   texture_transform_[0] = texture_transform_[5] = texture_transform_[10] =
