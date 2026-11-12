@@ -45,10 +45,10 @@ const GLfloat kQuadVertices[] = {
 };
 
 const GLfloat kQuadTexCoords[] = {
-     1.f, 0.f,
      0.f, 0.f,
-     1.f, 1.f,
+     1.f, 0.f,
      0.f, 1.f,
+     1.f, 1.f,
 };
 
 const char kVideoVertexShader[] =

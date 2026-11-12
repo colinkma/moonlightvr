@@ -38,9 +38,11 @@ jobs:
         id: version
         run: |
           VERSION_NAME=$(grep -oP 'versionName\s+"\K[0-9.]+' app/build.gradle)
-          WORKFLOW_VERSION="${VERSION_NAME}.${GITHUB_RUN_NUMBER}"
+          BUILD_DATE=$(TZ=Asia/Shanghai date +%Y-%m-%d)
+          BUILD_LABEL="${BUILD_DATE}-${GITHUB_RUN_NUMBER}"
           echo "VERSION_NAME=$VERSION_NAME" >> $GITHUB_OUTPUT
-          echo "WORKFLOW_VERSION=$WORKFLOW_VERSION" >> $GITHUB_OUTPUT
+          echo "BUILD_DATE=$BUILD_DATE" >> $GITHUB_OUTPUT
+          echo "BUILD_LABEL=$BUILD_LABEL" >> $GITHUB_OUTPUT
 
       - name: Prepare signing keystore
         env:
@@ -78,12 +80,12 @@ jobs:
       - name: Rename APK with metadata
         run: |
           BUILD_TYPE="debug"
-          WORKFLOW_VERSION="${{ steps.version.outputs.WORKFLOW_VERSION }}"
+          BUILD_LABEL="${{ steps.version.outputs.BUILD_LABEL }}"
           SHA_SHORT=$(echo ${{ github.sha }} | cut -c1-8)
           APK_PATH="app/build/outputs/apk/vrMode/${BUILD_TYPE,,}/app-vrMode-${BUILD_TYPE,,}.apk"
           
           if [ -f "$APK_PATH" ]; then
-            NEW_NAME="MoonlightVR-VrMode-${WORKFLOW_VERSION}.apk"
+            NEW_NAME="MoonlightVR-VrMode-${BUILD_LABEL}.apk"
             cp "$APK_PATH" "$NEW_NAME"
             echo "APK_NAME=$NEW_NAME" >> $GITHUB_ENV
             echo "APK exists at: $APK_PATH"
@@ -91,12 +93,12 @@ jobs:
             echo "Error: APK not found at $APK_PATH"
             exit 1
           fi
-          echo "WORKFLOW_VERSION=${WORKFLOW_VERSION}" >> $GITHUB_ENV
+          echo "BUILD_LABEL=${BUILD_LABEL}" >> $GITHUB_ENV
 
       - name: Upload APK as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MoonlightVR-VrMode-${{ steps.version.outputs.WORKFLOW_VERSION }}
+          name: MoonlightVR-VrMode-${{ steps.version.outputs.BUILD_LABEL }}
           path: MoonlightVR-*.apk
           retention-days: 30
 
@@ -123,6 +125,8 @@ jobs:
           echo "| Branch | $BRANCH_NAME |" >> $GITHUB_STEP_SUMMARY
           echo "| Flavor | vrMode |" >> $GITHUB_STEP_SUMMARY
           echo "| Build Type | debug |" >> $GITHUB_STEP_SUMMARY
-          echo "| Version | ${WORKFLOW_VERSION:-unknown} |" >> $GITHUB_STEP_SUMMARY
+          echo "| App Version | ${{ steps.version.outputs.VERSION_NAME }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build Date (Asia/Shanghai) | ${{ steps.version.outputs.BUILD_DATE }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build | ${BUILD_LABEL:-unknown} |" >> $GITHUB_STEP_SUMMARY
           echo "| Commit | ${{ github.sha }} |" >> $GITHUB_STEP_SUMMARY
           echo "| APK | ${{ env.APK_NAME }} |" >> $GITHUB_STEP_SUMMARY

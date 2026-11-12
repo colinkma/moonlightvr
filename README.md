@@ -1,31 +1,24 @@
-# MoonlightVR
+# MoonlightVR 固定画面头戴显示器版
 
-> [!WARNING]  
-> This is experimental software in early stage of development. Please report issues you encounter.
+这是基于原版 Moonlight for Android 修改的版本。相较原版及原 VR 分支，本版本已调整为**纯粹固定画面的头戴显示器版本**：
 
-Fork of [Moonlight for Android](https://github.com/moonlight-stream/moonlight-android) application, attempting to add virtual reality support via Google Cardboard.
+- 将电脑串流画面固定为左右眼并排（SBS）显示。
+- 左右眼显示同一份完整的二维画面，不生成虚拟 3D 巨幕或电影院场景。
+- 保留 Google Cardboard 镜片光学校正，以适配头戴设备镜片。
+- 保留 Moonlight 原有串流与硬件视频解码流程。
 
-[Moonlight for Android](https://moonlight-stream.org) is an open source client for NVIDIA GameStream and [Sunshine](https://github.com/LizardByte/Sunshine)([F-Droid](https://f-droid.org/packages/com.limelight)).
+本版本不包含头部追踪、随头部移动的虚拟屏幕、曲面屏幕、天空盒或摄像头画中画等非必要 VR 场景功能。
 
-Moonlight for Android will allow you to stream your full collection of games from your Windows PC to your Android device,
-whether in your own home or over the internet.
+## 项目基础
 
-## About the fork
+本项目基于 [Moonlight for Android](https://github.com/moonlight-stream/moonlight-android)。Moonlight 是用于连接 NVIDIA GameStream 兼容主机及 [Sunshine](https://github.com/LizardByte/Sunshine) 的开源串流客户端。
 
-Transforms stream into two lenses for virtual reality. Screen is visible in static VR scene.
-Fork offers extensive customization options for screen curvature and size.
-The PiP (Picture-In-Picture) can be enabled in settings for seeing world around you in gogles.
+## 说明
 
-It also offers remote controller via WebUI. Can be accessed via <mobile-ip>:8555/ from other mobile device for intuitive touch gestures.
+本版本主要面向搭配 Google Cardboard 兼容头戴设备使用。不同设备的屏幕比例和镜片参数可能不同，实际显示效果需要在对应设备上测试；镜片校正强度可在应用设置中调整。
 
-## Authors
+## 原版项目
 
-Original Moonlight-Android app authors:
-
-* [Cameron Gutman](https://github.com/cgutman)  
-* [Diego Waxemberg](https://github.com/dwaxemberg)  
-* [Aaron Neyer](https://github.com/Aaronneyer)  
-* [Andrew Hennessy](https://github.com/yetanothername)
-
-Moonlight is the work of students at [Case Western](http://case.edu) and was
-started as a project at [MHacks](http://mhacks.org).
+- [Moonlight for Android](https://github.com/moonlight-stream/moonlight-android)
+- [Moonlight 官网](https://moonlight-stream.org)
+- [Sunshine](https://github.com/LizardByte/Sunshine)
