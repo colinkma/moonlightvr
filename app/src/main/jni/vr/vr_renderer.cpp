@@ -21,8 +21,6 @@ namespace moonlight_vr {
 
 namespace {
 
-constexpr float kZNear = 0.1f;
-constexpr float kZFar = 100.0f;
 constexpr float kScreenWidthMeters = 2.2f;
 constexpr float kScreenAspectRatio = 16.0f / 9.0f;
 constexpr float kMinScreenDistanceMeters = 1.0f;
@@ -31,7 +29,6 @@ constexpr float kDefaultScreenDistanceMeters = 2.0f;
 constexpr float kMinLensScale = 0.5f;
 constexpr float kMaxLensScale = 3.0f;
 
-constexpr int kEyeCount = 2;
 
 constexpr float kMaxHorizontalCurvatureAngle = 3.14159265358979323846f;
 constexpr float kMaxVerticalCurvatureAngle = 1.57079632679489661923f;
@@ -136,7 +133,7 @@ VrMoonlightApp::VrMoonlightApp(JavaVM* vm, jobject activity, jobject asset_manag
       activity_(nullptr),
       java_asset_mgr_(nullptr),
       asset_mgr_(nullptr),
-          lens_distortion_(nullptr),
+      lens_distortion_(nullptr),
       distortion_renderer_(nullptr),
       screen_params_changed_(false),
       device_params_changed_(true),
