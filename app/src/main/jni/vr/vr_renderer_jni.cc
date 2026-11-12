@@ -59,6 +59,13 @@ Java_com_limelight_vr_VrRenderer_nativeSetScreenDistance(JNIEnv*, jobject,
 }
 
 extern "C" JNIEXPORT void JNICALL
+Java_com_limelight_vr_VrRenderer_nativeSetHeadLockedMode(JNIEnv*, jobject,
+                                                         jlong handle,
+                                                         jboolean enabled) {
+  FromHandle(handle)->SetHeadLockedMode(enabled == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT void JNICALL
 Java_com_limelight_vr_VrRenderer_nativeSetScreenSize(JNIEnv*, jobject,
                                                      jlong handle,
                                                      jfloat sizeMultiplier) {
