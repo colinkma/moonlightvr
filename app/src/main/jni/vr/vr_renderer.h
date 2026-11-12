@@ -57,8 +57,7 @@ class VrMoonlightApp {
   void ResetRenderTarget();
   void UpdateRenderTarget();
   bool UpdateDeviceParams();
-  void RenderVideoToTexture(const std::array<float, 3>& head_position,
-                            const std::array<float, 4>& head_orientation);
+  void RenderVideoToTexture();
   void DestroyCardboardResources();
   void UpdateModelMatrix();
   void UpdateScreenGeometry();
