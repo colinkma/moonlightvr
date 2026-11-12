@@ -15,6 +15,7 @@ jobs:
     permissions:
       contents: read
       actions: write
+      contents: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -95,23 +96,14 @@ jobs:
           fi
           echo "BUILD_LABEL=${BUILD_LABEL}" >> $GITHUB_ENV
 
-      - name: Upload APK as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: MoonlightVR-VrMode-${{ steps.version.outputs.BUILD_LABEL }}
-          path: MoonlightVR-*.apk
-          retention-days: 30
-
-      - name: Upload Build Logs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-logs
-          path: |
-            build/reports/
-            app/build/outputs/**/*.txt
-            app/build/outputs/**/*.log
-          retention-days: 7
+      - name: Publish APK as a direct GitHub Release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "vrmode-${BUILD_LABEL}" "$APK_NAME" \
+            --title "MoonlightVR 固定画面版 ${BUILD_LABEL}" \
+            --notes "固定画面 VR 模式 APK。可直接下载 APK 文件安装。" \
+            --prerelease
 
       - name: Summary
         run: |
