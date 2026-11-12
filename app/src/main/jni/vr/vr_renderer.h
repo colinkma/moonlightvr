@@ -50,7 +50,6 @@ class VrMoonlightApp {
   float GetHorizontalCurvature() const;
   float GetVerticalCurvature() const;
   float GetScreenSize() const;
-  void SetCurrentFramePose(const std::array<float, 4>& orientation);
   void RecenterView();
 
  private:
@@ -70,7 +69,6 @@ class VrMoonlightApp {
   jobject java_asset_mgr_;
   AAssetManager* asset_mgr_;
 
-  CardboardHeadTracker* head_tracker_;
   CardboardLensDistortion* lens_distortion_;
   CardboardDistortionRenderer* distortion_renderer_;
 
@@ -115,15 +113,8 @@ class VrMoonlightApp {
   bool using_curved_geometry_;
   int curved_rows_;
   int curved_vertices_per_strip_;
-  std::array<float, 4> last_rendered_orientation_;
-  bool has_render_pose_;
   bool skybox_enabled_ = true;
   float skybox_brightness_ = 1.0f;
-  std::array<float, 4> recenter_offset_;
-  bool has_recenter_offset_;
-  std::array<float, 4> current_recenter_offset_;
-  bool has_current_recenter_offset_;
-  int64_t last_recenter_update_nanos_;
   bool geometry_dirty_;
   float screen_yaw_radians_ = 0.0f;
   float screen_pitch_radians_ = 0.0f;
