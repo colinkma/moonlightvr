@@ -270,6 +270,7 @@ public class Game extends Activity implements SurfaceHolder.Callback,
             vrSurfaceView.setVisibility(View.VISIBLE);
             vrRenderer = new VrRenderer(this, vrSurfaceView, vrSurfaceListener);
             vrRenderer.setScreenDistance(prefConfig.vrScreenDistanceMeters);
+            vrRenderer.setHeadLockedMode(prefConfig.vrHeadLocked);
             vrRenderer.setScreenSize(prefConfig.vrScreenSizeMultiplier);
             vrRenderer.setCurvatureMode(prefConfig.vrCurvatureMode);
             vrRenderer.setCurvatureAmount(prefConfig.vrCurvatureAmountPercent);
