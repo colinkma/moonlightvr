@@ -227,6 +227,8 @@
     <string name="summary_checkbox_enable_pip">Allows the stream to be viewed (but not controlled) while multitasking</string>
     <string name="title_checkbox_enable_vr">Enable VR mode</string>
     <string name="summary_checkbox_enable_vr">Use with the Cardboard VR set</string>
+    <string name="title_checkbox_vr_head_locked">Head-locked screen</string>
+    <string name="summary_checkbox_vr_head_locked">Keep the streamed screen in front of your eyes as you turn your head. Recommended for using your phone as a wireless Cardboard HMD.</string>
     <string name="title_checkbox_enable_skybox">Enable VR Skybox</string>
     <string name="summary_checkbox_enable_skybox">Render a world-locked skybox background in VR mode</string>
     <string name="title_checkbox_quick_zoom">Quick zoom</string>
