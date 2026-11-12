@@ -150,6 +150,8 @@ public class Game extends Activity implements SurfaceHolder.Callback,
     private boolean vrMode;
     private GLSurfaceView vrSurfaceView;
     private VrRenderer vrRenderer;
+    private TextView vrLensLockButton;
+    private View vrLensCenterLine;
     private Surface vrRenderSurface;
     private ScaleGestureDetector vrLensScaleDetector;
     private float lensScale = 1.0f;
@@ -269,36 +271,12 @@ public class Game extends Activity implements SurfaceHolder.Callback,
             loadVrLensPreferences();
             vrSurfaceView.setVisibility(View.VISIBLE);
             vrRenderer = new VrRenderer(this, vrSurfaceView, vrSurfaceListener);
-            vrRenderer.setScreenDistance(prefConfig.vrScreenDistanceMeters);
-            vrRenderer.setScreenSize(prefConfig.vrScreenSizeMultiplier);
-            vrRenderer.setCurvatureMode(prefConfig.vrCurvatureMode);
-            vrRenderer.setCurvatureAmount(prefConfig.vrCurvatureAmountPercent);
-            vrRenderer.setHorizontalCurvature(prefConfig.vrHorizontalCurvaturePercent);
-            vrRenderer.setVerticalCurvature(prefConfig.vrVerticalCurvaturePercent);
-            vrRenderer.setSkyboxEnabled(prefConfig.enableSkybox);
+            vrRenderer.setVideoAspectRatio(prefConfig.width, prefConfig.height);
+            vrRenderer.setLensDistortionStrength(prefConfig.vrLensDistortionStrengthPercent / 100.0f);
             vrSurfaceView.setEGLContextClientVersion(2);
             vrSurfaceView.setRenderer(vrRenderer);
             vrSurfaceView.setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY);
             initVrLensControls();
-
-            vrCameraManager = new VrCameraManager(this);
-
-            if (prefConfig.enableSkybox) {
-                final int[] panoramaResources = new int[] {
-                    R.drawable.panorama_0,
-                    R.drawable.panorama_1,
-                    R.drawable.panorama_2,
-                    R.drawable.panorama_3,
-                    R.drawable.panorama_4,
-                    R.drawable.panorama_5
-                };
-                vrSurfaceView.queueEvent(new Runnable() {
-                    @Override
-                    public void run() {
-                        vrRenderer.loadSkyboxCubemap(getResources(), panoramaResources);
-                    }
-                });
-            }
 
             startVrControlService(vrRenderer);
         }
@@ -2379,6 +2357,21 @@ public class Game extends Activity implements SurfaceHolder.Callback,
             }
         });
 
+        vrLensLockButton = findViewById(R.id.vrLensLockButton);
+        vrLensCenterLine = findViewById(R.id.vrLensCenterLine);
+        if (vrLensLockButton != null) {
+            vrLensLockButton.setVisibility(View.VISIBLE);
+            vrLensLockButton.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View view) {
+                    lensLockEnabled = !lensLockEnabled;
+                    saveVrLensPreferences();
+                    updateVrLensLockUi();
+                }
+            });
+        }
+        if (vrLensCenterLine != null) vrLensCenterLine.setVisibility(View.VISIBLE);
+        updateVrLensLockUi();
         vrRenderer.setLensScale(lensScale);
         if (leftLensOffsetX != 0.0f) {
             vrRenderer.adjustLeftLensOffset(leftLensOffsetX);
@@ -2470,6 +2463,7 @@ public class Game extends Activity implements SurfaceHolder.Callback,
                 .putFloat(PreferenceConfiguration.VR_LENS_SCALE_PREF_STRING, lensScale)
                 .putFloat(PreferenceConfiguration.VR_LEFT_LENS_OFFSET_PREF_STRING, leftLensOffsetX)
                 .putFloat(PreferenceConfiguration.VR_RIGHT_LENS_OFFSET_PREF_STRING, rightLensOffsetX)
+                .putBoolean(PreferenceConfiguration.VR_LENS_LOCK_PREF_STRING, lensLockEnabled)
                 .apply();
         if (prefConfig != null) {
             prefConfig.vrLensScale = lensScale;
@@ -2482,9 +2476,15 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         lensLockEnabled = PreferenceManager
                 .getDefaultSharedPreferences(this)
                 .getBoolean(PreferenceConfiguration.VR_LENS_LOCK_PREF_STRING, false);
-        if (prefConfig != null) {
-            prefConfig.lockVrLenses = lensLockEnabled;
+        if (prefConfig != null) prefConfig.lockVrLenses = lensLockEnabled;
+        updateVrLensLockUi();
+    }
+
+    private void updateVrLensLockUi() {
+        if (vrLensLockButton != null) {
+            vrLensLockButton.setText(getString(lensLockEnabled ? R.string.vr_unlock_display_blocks : R.string.vr_lock_display_blocks));
         }
+        if (vrLensCenterLine != null) vrLensCenterLine.setVisibility(lensLockEnabled ? View.GONE : View.VISIBLE);
     }
 
     @Override

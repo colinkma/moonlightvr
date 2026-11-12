@@ -146,6 +146,10 @@
     <!-- Preferences -->
     <string name="category_basic_settings">Basic Settings</string>
     <string name="category_vr_settings">VR Mode</string>
+    <string name="title_seekbar_vr_lens_distortion_strength">Lens correction strength</string>
+    <string name="summary_seekbar_vr_lens_distortion_strength">Adjust optical correction to match your headset lenses. Lower it if the image looks overly bulged.</string>
+    <string name="vr_lock_display_blocks">Lock display layout</string>
+    <string name="vr_unlock_display_blocks">Unlock display layout</string>
     <string name="title_resolution_list">Video resolution</string>
     <string name="summary_resolution_list">Increase to improve image clarity. Decrease for better performance on lower end devices and slower networks.</string>
     <string name="title_native_res_dialog">Native Resolution Warning</string>

@@ -243,6 +243,14 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
         return videoSurface;
     }
 
+    public void setVideoAspectRatio(int width, int height) {
+        if (width > 0 && height > 0) nativeSetVideoAspectRatio(nativeHandle, (float) width / height);
+    }
+
+    public void setLensDistortionStrength(float strength) {
+        nativeSetLensDistortionStrength(nativeHandle, Math.max(0.0f, Math.min(1.0f, strength)));
+    }
+
     public void setScreenDistance(float distanceMeters) {
         nativeSetScreenDistance(nativeHandle, distanceMeters);
     }
@@ -480,6 +488,8 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
     private native int nativeOnSurfaceCreated(long handle);
     private native void nativeOnSurfaceChanged(long handle, int width, int height);
     private native void nativeSetTextureTransform(long handle, float[] transform);
+    private native void nativeSetVideoAspectRatio(long handle, float aspectRatio);
+    private native void nativeSetLensDistortionStrength(long handle, float strength);
     private native void nativeOnDrawFrame(long handle);
     private native void nativeOnPause(long handle);
     private native void nativeOnResume(long handle);

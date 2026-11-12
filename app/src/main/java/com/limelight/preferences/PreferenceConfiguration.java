@@ -77,6 +77,7 @@ public class PreferenceConfiguration {
     private static final String VR_HORIZONTAL_CURVATURE_PREF_STRING = "seekbar_vr_horizontal_curvature";
     private static final String VR_VERTICAL_CURVATURE_PREF_STRING = "seekbar_vr_vertical_curvature";
     public static final String VR_LENS_SCALE_PREF_STRING = "vr_lens_scale";
+    public static final String VR_LENS_DISTORTION_STRENGTH_PREF_STRING = "seekbar_vr_lens_distortion_strength";
     public static final String VR_LEFT_LENS_OFFSET_PREF_STRING = "vr_left_lens_offset_x";
     public static final String VR_RIGHT_LENS_OFFSET_PREF_STRING = "vr_right_lens_offset_x";
     public static final String VR_LENS_LOCK_PREF_STRING = "checkbox_lock_vr_lenses";
@@ -125,6 +126,7 @@ public class PreferenceConfiguration {
     private static final boolean DEFAULT_GAMEPAD_MOTION_SENSORS = true;
     private static final boolean DEFAULT_GAMEPAD_MOTION_FALLBACK = false;
     private static final int DEFAULT_VR_SCREEN_DISTANCE_INT = 20;
+    private static final int DEFAULT_VR_LENS_DISTORTION_STRENGTH_INT = 70;
     private static final int DEFAULT_VR_SCREEN_SIZE_INT = 50;
     private static final int DEFAULT_VR_CURVATURE_MODE_INT = 0;
     private static final int DEFAULT_VR_CURVATURE_AMOUNT_INT = 50;
@@ -183,6 +185,7 @@ public class PreferenceConfiguration {
     public boolean gamepadMotionSensorsFallbackToDevice;
     public boolean enableVr;
     public boolean enableSkybox;
+    public int vrLensDistortionStrengthPercent;
     public float vrScreenDistanceMeters;
     public float vrScreenSizeMultiplier;
     public int vrCurvatureMode;
@@ -632,6 +635,7 @@ public class PreferenceConfiguration {
         config.showGuideButton = prefs.getBoolean(SHOW_GUIDE_BUTTON_PREF_STRING, SHOW_GUIDE_BUTTON_DEFAULT);
         config.enableHdr = prefs.getBoolean(ENABLE_HDR_PREF_STRING, DEFAULT_ENABLE_HDR) && !isShieldAtvFirmwareWithBrokenHdr();
         config.enableVr = prefs.getBoolean(ENABLE_VR_PREF_STRING, DEFAULT_ENABLE_VR);
+        config.vrLensDistortionStrengthPercent = prefs.getInt(VR_LENS_DISTORTION_STRENGTH_PREF_STRING, DEFAULT_VR_LENS_DISTORTION_STRENGTH_INT);
         config.enableSkybox = prefs.getBoolean(ENABLE_SKYBOX_PREF_STRING, DEFAULT_ENABLE_SKYBOX);
         int vrDistanceRaw = prefs.getInt(VR_SCREEN_DISTANCE_PREF_STRING, DEFAULT_VR_SCREEN_DISTANCE_INT);
         config.vrScreenDistanceMeters = vrDistanceRaw / 10f;

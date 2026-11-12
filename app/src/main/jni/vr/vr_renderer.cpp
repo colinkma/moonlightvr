@@ -45,10 +45,10 @@ const GLfloat kQuadVertices[] = {
 };
 
 const GLfloat kQuadTexCoords[] = {
-     0.f, 1.f,
-     1.f, 1.f,
-     0.f, 0.f,
      1.f, 0.f,
+     0.f, 0.f,
+     1.f, 1.f,
+     0.f, 1.f,
 };
 
 const char kVideoVertexShader[] =
@@ -330,6 +330,17 @@ void VrMoonlightApp::SetTextureTransform(const float* transform) {
   }
 }
 
+void VrMoonlightApp::SetVideoAspectRatio(float aspect_ratio) {
+  if (std::isfinite(aspect_ratio) && aspect_ratio > 0.1f && aspect_ratio < 10.0f) {
+    video_aspect_ratio_ = aspect_ratio;
+  }
+}
+
+void VrMoonlightApp::SetLensDistortionStrength(float strength) {
+  lens_distortion_strength_ = std::clamp(strength, 0.0f, 1.0f);
+  lens_mesh_dirty_ = true;
+}
+
 void VrMoonlightApp::OnDrawFrame() {
   if (screen_width_ == 0 || screen_height_ == 0 || !UpdateDeviceParams()) {
     return;
@@ -482,12 +493,20 @@ bool VrMoonlightApp::UpdateDeviceParams() {
                                    left_mesh.vertices + left_mesh.n_vertices * 2);
     std::vector<float> custom_right(right_mesh.vertices,
                                     right_mesh.vertices + right_mesh.n_vertices * 2);
+    std::vector<float> custom_left_uvs(left_mesh.uvs,
+                                       left_mesh.uvs + left_mesh.n_vertices * 2);
+    std::vector<float> custom_right_uvs(right_mesh.uvs,
+                                        right_mesh.uvs + right_mesh.n_vertices * 2);
 
     TransformLensMesh(custom_left, lens_scale_, left_lens_offset_x_, true);
     TransformLensMesh(custom_right, lens_scale_, right_lens_offset_x_, false);
+    ApplyLensDistortionStrength(left_mesh, custom_left_uvs);
+    ApplyLensDistortionStrength(right_mesh, custom_right_uvs);
 
     left_mesh.vertices = custom_left.data();
     right_mesh.vertices = custom_right.data();
+    left_mesh.uvs = custom_left_uvs.data();
+    right_mesh.uvs = custom_right_uvs.data();
 
     CardboardDistortionRenderer_setMesh(distortion_renderer_, &left_mesh, kLeft);
     CardboardDistortionRenderer_setMesh(distortion_renderer_, &right_mesh, kRight);
@@ -496,6 +515,29 @@ bool VrMoonlightApp::UpdateDeviceParams() {
   }
 
   return true;
+}
+
+void VrMoonlightApp::ApplyLensDistortionStrength(const CardboardMesh& source,
+                                                   std::vector<float>& uvs) const {
+  if (source.vertices == nullptr || uvs.empty() || source.n_vertices <= 0) {
+    return;
+  }
+  float min_x = source.vertices[0], max_x = source.vertices[0];
+  float min_y = source.vertices[1], max_y = source.vertices[1];
+  for (int i = 0; i < source.n_vertices; ++i) {
+    const float x = source.vertices[i * 2], y = source.vertices[i * 2 + 1];
+    min_x = std::min(min_x, x); max_x = std::max(max_x, x);
+    min_y = std::min(min_y, y); max_y = std::max(max_y, y);
+  }
+  const float width = max_x - min_x, height = max_y - min_y;
+  if (width <= 0.0001f || height <= 0.0001f) return;
+  // Blend Cardboard's inverse-distortion UVs with a linear, undistorted map.
+  for (int i = 0; i < source.n_vertices; ++i) {
+    const float linear_u = (source.vertices[i * 2] - min_x) / width;
+    const float linear_v = (source.vertices[i * 2 + 1] - min_y) / height;
+    uvs[i * 2] = linear_u + (uvs[i * 2] - linear_u) * lens_distortion_strength_;
+    uvs[i * 2 + 1] = linear_v + (uvs[i * 2 + 1] - linear_v) * lens_distortion_strength_;
+  }
 }
 
 void VrMoonlightApp::TransformLensMesh(std::vector<float>& vertices, float scale,
@@ -571,12 +613,22 @@ void VrMoonlightApp::RenderVideoToTexture() {
   const int left_eye_width = screen_width_ / 2;
   const int right_eye_width = screen_width_ - left_eye_width;
 
-  // Draw the same complete input frame into the left and right eye regions.
-  glViewport(0, 0, left_eye_width, screen_height_);
-  glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-
-  glViewport(left_eye_width, 0, right_eye_width, screen_height_);
-  glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+  // Fit the complete source frame in each eye without cropping or stretching.
+  const auto draw_eye = [this](int x, int width) {
+    if (width <= 0 || screen_height_ <= 0) return;
+    const float eye_aspect = static_cast<float>(width) / screen_height_;
+    int draw_width = width, draw_height = screen_height_;
+    if (video_aspect_ratio_ > eye_aspect) {
+      draw_height = std::max(1, static_cast<int>(std::lround(width / video_aspect_ratio_)));
+    } else {
+      draw_width = std::max(1, static_cast<int>(std::lround(screen_height_ * video_aspect_ratio_)));
+    }
+    glViewport(x + (width - draw_width) / 2, (screen_height_ - draw_height) / 2,
+               draw_width, draw_height);
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+  };
+  draw_eye(0, left_eye_width);
+  draw_eye(left_eye_width, right_eye_width);
 
   glDisableVertexAttribArray(position_attrib_);
   glDisableVertexAttribArray(texcoord_attrib_);

@@ -52,6 +52,20 @@ Java_com_limelight_vr_VrRenderer_nativeSetTextureTransform(JNIEnv* env, jobject,
 }
 
 extern "C" JNIEXPORT void JNICALL
+Java_com_limelight_vr_VrRenderer_nativeSetVideoAspectRatio(JNIEnv*, jobject,
+                                                               jlong handle,
+                                                               jfloat aspectRatio) {
+  FromHandle(handle)->SetVideoAspectRatio(aspectRatio);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_limelight_vr_VrRenderer_nativeSetLensDistortionStrength(JNIEnv*, jobject,
+                                                                jlong handle,
+                                                                jfloat strength) {
+  FromHandle(handle)->SetLensDistortionStrength(strength);
+}
+
+extern "C" JNIEXPORT void JNICALL
 Java_com_limelight_vr_VrRenderer_nativeSetScreenDistance(JNIEnv*, jobject,
                                                         jlong handle,
                                                         jfloat distanceMeters) {

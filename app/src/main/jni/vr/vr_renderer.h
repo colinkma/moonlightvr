@@ -24,6 +24,8 @@ class VrMoonlightApp {
   jint OnSurfaceCreated(JNIEnv* env);
   void OnSurfaceChanged(int width, int height);
   void SetTextureTransform(const float* transform);
+  void SetVideoAspectRatio(float aspectRatio);
+  void SetLensDistortionStrength(float strength);
   void OnDrawFrame();
   void OnPause();
   void OnResume();
@@ -62,6 +64,8 @@ class VrMoonlightApp {
   void UpdateScreenGeometry();
   void TransformLensMesh(std::vector<float>& vertices, float scale,
                          float offset_x, bool is_left_eye);
+  void ApplyLensDistortionStrength(const CardboardMesh& source,
+                                   std::vector<float>& uvs) const;
   void UpdateCameraModelMatrix();
 
   JavaVM* java_vm_;
@@ -120,6 +124,8 @@ class VrMoonlightApp {
   float screen_pitch_radians_ = 0.0f;
   float screen_rotation_radians_ = 0.0f;
   float lens_scale_ = 1.0f;
+  float lens_distortion_strength_ = 0.70f;
+  float video_aspect_ratio_ = 16.0f / 9.0f;
   float left_lens_offset_x_ = 0.0f;
   float right_lens_offset_x_ = 0.0f;
   bool lens_mesh_dirty_ = true;

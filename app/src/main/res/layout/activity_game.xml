@@ -56,4 +56,30 @@
         android:preferKeepClear="true"
         android:visibility="gone" />
 
+    <View
+        android:id="@+id/vrLensCenterLine"
+        android:layout_width="2dp"
+        android:layout_height="match_parent"
+        android:layout_gravity="center"
+        android:background="#B3FFFFFF"
+        android:clickable="false"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/vrLensLockButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|end"
+        android:layout_margin="16dp"
+        android:background="#CC202020"
+        android:clickable="true"
+        android:focusable="true"
+        android:paddingLeft="14dp"
+        android:paddingRight="14dp"
+        android:paddingTop="9dp"
+        android:paddingBottom="9dp"
+        android:textColor="#FFFFFFFF"
+        android:textSize="14sp"
+        android:visibility="gone" />
+
 </merge>
