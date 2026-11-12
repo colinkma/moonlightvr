@@ -48,11 +48,6 @@
             android:summary="@string/summary_checkbox_enable_vr"
             android:defaultValue="true" />
         <CheckBoxPreference
-            android:key="checkbox_vr_head_locked"
-            android:title="@string/title_checkbox_vr_head_locked"
-            android:summary="@string/summary_checkbox_vr_head_locked"
-            android:defaultValue="true" />
-        <CheckBoxPreference
             android:key="checkbox_enable_skybox"
             android:title="@string/title_checkbox_enable_skybox"
             android:summary="@string/summary_checkbox_enable_skybox"
