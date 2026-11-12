@@ -81,7 +81,7 @@ const char kLineVertexShader[] =
 const char kLineFragmentShader[] =
     "precision mediump float;"                "\n"
     "void main() {"                           "\n"
-    "  gl_FragColor = vec4(0.22, 0.22, 0.22, 1.0);" "\n"
+    "  gl_FragColor = vec4(0.627, 0.627, 0.627, 1.0);" "\n"
     "}";
 
 const GLfloat kLineVertices[] = {
