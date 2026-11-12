@@ -23,9 +23,6 @@ namespace {
 
 constexpr float kZNear = 0.1f;
 constexpr float kZFar = 100.0f;
-constexpr int kVelocityFilterCutoffFrequency = 6;
-constexpr int64_t kPredictionTimeWithoutVsyncNanos = 50000000LL;
-constexpr int64_t kDisplayPosePredictionNanos = 16000000LL;
 constexpr float kScreenWidthMeters = 2.2f;
 constexpr float kScreenAspectRatio = 16.0f / 9.0f;
 constexpr float kMinScreenDistanceMeters = 1.0f;
@@ -139,8 +136,7 @@ VrMoonlightApp::VrMoonlightApp(JavaVM* vm, jobject activity, jobject asset_manag
       activity_(nullptr),
       java_asset_mgr_(nullptr),
       asset_mgr_(nullptr),
-      head_tracker_(nullptr),
-      lens_distortion_(nullptr),
+          lens_distortion_(nullptr),
       distortion_renderer_(nullptr),
       screen_params_changed_(false),
       device_params_changed_(true),
@@ -239,11 +235,6 @@ VrMoonlightApp::~VrMoonlightApp() {
   if (depth_renderbuffer_) {
     glDeleteRenderbuffers(1, &depth_renderbuffer_);
   }
-  if (head_tracker_ != nullptr) {
-    CardboardHeadTracker_destroy(head_tracker_);
-    head_tracker_ = nullptr;
-  }
-
   JNIEnv* env = nullptr;
   if (java_vm_->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) == JNI_OK) {
     if (activity_) {
@@ -614,33 +605,8 @@ void VrMoonlightApp::DestroyCardboardResources() {
   }
 }
 
-void VrMoonlightApp::SetCurrentFramePose(const std::array<float, 4>& orientation) {
-  last_rendered_orientation_ = orientation;
-  has_render_pose_ = true;
-}
-
 void VrMoonlightApp::RecenterView() {
-  screen_yaw_radians_ = 0.0f;
-  screen_pitch_radians_ = 0.0f;
-  screen_rotation_radians_ = 0.0f;
-  UpdateModelMatrix();
-
-  if (head_tracker_ == nullptr) {
-    return;
-  }
-  int64_t timestamp = GetBootTimeNano() + kPredictionTimeWithoutVsyncNanos;
-  float position[3];
-  float orientation[4];
-  CardboardHeadTracker_getPose(head_tracker_, timestamp, kLandscapeLeft,
-                               position, orientation);
-  recenter_offset_ = {orientation[0], orientation[1], orientation[2],
-                      orientation[3]};
-  has_recenter_offset_ = true;
-  if (!has_current_recenter_offset_) {
-    current_recenter_offset_ = {0.f, 0.f, 0.f, 1.f};
-    has_current_recenter_offset_ = true;
-  }
-  last_recenter_update_nanos_ = 0;
+  // There is no tracked pose to recenter in fixed side-by-side mode.
 }
 
 void VrMoonlightApp::SetScreenDistance(float meters) {
