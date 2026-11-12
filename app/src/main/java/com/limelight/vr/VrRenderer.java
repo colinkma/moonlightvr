@@ -247,10 +247,6 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
         nativeSetScreenDistance(nativeHandle, distanceMeters);
     }
 
-    public void setHeadLockedMode(boolean enabled) {
-        nativeSetHeadLockedMode(nativeHandle, enabled);
-    }
-
     public void setScreenSize(float sizeMultiplier) {
         nativeSetScreenSize(nativeHandle, sizeMultiplier);
     }
@@ -488,7 +484,6 @@ public class VrRenderer implements Renderer, SurfaceTexture.OnFrameAvailableList
     private native void nativeOnPause(long handle);
     private native void nativeOnResume(long handle);
     private native void nativeSetScreenDistance(long handle, float distanceMeters);
-    private native void nativeSetHeadLockedMode(long handle, boolean enabled);
     private native void nativeSetScreenSize(long handle, float sizeMultiplier);
     private native void nativeAdjustScreenDistance(long handle, float deltaMeters);
     private native void nativeAdjustScreenSize(long handle, float deltaMultiplier);
