@@ -28,6 +28,7 @@ class VrMoonlightApp {
   void OnPause();
   void OnResume();
   void SetScreenDistance(float meters);
+  void SetHeadLockedMode(bool enabled);
   void SetScreenSize(float sizeMultiplier);
   void AdjustScreenDistance(float deltaMeters);
   void AdjustScreenSize(float deltaMultiplier);
@@ -106,6 +107,7 @@ class VrMoonlightApp {
   float texture_transform_[16];
   Matrix4x4 model_matrix_;
   float screen_distance_meters_;
+  bool head_locked_mode_ = true;
   float screen_size_multiplier_;
   int curvature_mode_;
   float curvature_amount_percent_;
