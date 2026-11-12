@@ -714,7 +714,11 @@ void VrMoonlightApp::RenderVideoToTexture(
         lens_distortion_, eyes[eye_index], kZNear, kZFar, projection_raw);
     Matrix4x4 projection = GetMatrixFromGlArray(projection_raw);
 
-    Matrix4x4 view = eye_from_head * head_view;
+    // In head-locked mode, cancel the tracked head pose for the streamed panel.
+    // Cardboard still supplies per-eye transforms, so stereo separation and lens
+    // distortion remain active while the screen stays centered in the viewer. The
+    // world-locked skybox below intentionally continues to use head_view.
+    Matrix4x4 view = head_locked_mode_ ? eye_from_head : eye_from_head * head_view;
     Matrix4x4 mvp = projection * view * model_matrix_;
     std::array<float, 16> mvp_gl = mvp.ToGlArray();
 
@@ -753,7 +757,7 @@ void VrMoonlightApp::RenderVideoToTexture(
           lens_distortion_, eyes[eye_index], kZNear, kZFar, projection_raw);
       Matrix4x4 projection = GetMatrixFromGlArray(projection_raw);
 
-      Matrix4x4 view = eye_from_head * head_view;
+      Matrix4x4 view = head_locked_mode_ ? eye_from_head : eye_from_head * head_view;
       Matrix4x4 camera_mvp = projection * view * camera_model_matrix_;
       std::array<float, 16> camera_mvp_gl = camera_mvp.ToGlArray();
 
@@ -851,6 +855,10 @@ void VrMoonlightApp::RecenterView() {
     has_current_recenter_offset_ = true;
   }
   last_recenter_update_nanos_ = 0;
+}
+
+void VrMoonlightApp::SetHeadLockedMode(bool enabled) {
+  head_locked_mode_ = enabled;
 }
 
 void VrMoonlightApp::SetScreenDistance(float meters) {
