@@ -67,28 +67,37 @@ public class UiHelper {
         String locale = PreferenceConfiguration.readPreferences(activity).language;
         if (!locale.equals(PreferenceConfiguration.DEFAULT_LANGUAGE)) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                // On Android 13, migrate this non-default language setting into the OS native API
-                LocaleManager localeManager = activity.getSystemService(LocaleManager.class);
-                localeManager.setApplicationLocales(LocaleList.forLanguageTags(locale));
-                PreferenceConfiguration.completeLanguagePreferenceMigration(activity);
-            }
-            else {
-                Configuration config = new Configuration(activity.getResources().getConfiguration());
-
-                // Some locales include both language and country which must be separated
-                // before calling the Locale constructor.
-                if (locale.contains("-"))
-                {
-                    config.locale = new Locale(locale.substring(0, locale.indexOf('-')),
-                            locale.substring(locale.indexOf('-') + 1));
+                // Migrate legacy app language settings to Android's per-app locale API.
+                try {
+                    LocaleManager localeManager = activity.getSystemService(LocaleManager.class);
+                    if (localeManager != null) {
+                        localeManager.setApplicationLocales(LocaleList.forLanguageTags(locale));
+                        PreferenceConfiguration.completeLanguagePreferenceMigration(activity);
+                        return;
+                    }
                 }
-                else
-                {
-                    config.locale = new Locale(locale);
+                catch (RuntimeException e) {
+                    // Fall through to the legacy resource configuration path rather than
+                    // crashing during activity startup on a device with broken locale support.
+                    e.printStackTrace();
                 }
-
-                activity.getResources().updateConfiguration(config, activity.getResources().getDisplayMetrics());
             }
+
+            Configuration config = new Configuration(activity.getResources().getConfiguration());
+
+            // Some locales include both language and country which must be separated
+            // before calling the Locale constructor.
+            if (locale.contains("-"))
+            {
+                config.locale = new Locale(locale.substring(0, locale.indexOf('-')),
+                        locale.substring(locale.indexOf('-') + 1));
+            }
+            else
+            {
+                config.locale = new Locale(locale);
+            }
+
+            activity.getResources().updateConfiguration(config, activity.getResources().getDisplayMetrics());
         }
     }
 
