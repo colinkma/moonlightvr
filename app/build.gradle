@@ -75,7 +75,7 @@ android {
     buildTypes {
         debug {
             applicationIdSuffix ".debug"
-            resValue "string", "app_label", "MoonlightVR (Debug)"
+            resValue "string", "app_label", "MoonlightVR"
 
             minifyEnabled true
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
